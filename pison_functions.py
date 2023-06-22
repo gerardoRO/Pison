@@ -12,10 +12,14 @@ from fastdtw import fastdtw
 from pyts.decomposition import SingularSpectrumAnalysis as ssa
 
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.cluster import KMeans
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
+from sklearn.cluster import DBSCAN, KMeans
+from sklearn.metrics import silhouette_score
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 
 from tslearn.metrics import dtw_path
-from tslearn.clustering import TimeSeriesKMeans
+from tslearn.clustering import TimeSeriesKMeans, silhouette_score as ts_silhouette_score
 
 import time 
 
@@ -484,12 +488,15 @@ def bivariate_analysis(df,col1,col2,transforms = {'corr':correlate} , stats = {'
         
     return df
 
-def id_num_clusters(X_df,k_groups = np.arange(2,15)):
-    """Visualize the distortion, silhouette score and inertia of clustering the data into various numbers of clusters.
+def id_num_clusters(X_df,k_groups = np.arange(2,15),show = True):
+    """Identify and visualize the distortion, silhouette score and inertia of clustering the data into various numbers of clusters.
 
     Args:
         X_df (pandas.DataFrame): DataFrame of features to cluster
         k_groups (np.array, optional): Array of number of clusters to visualize. Defaults to np.arange(1,15).
+        show (bool, optional): To display the inertia, distortion and silhouette scores. Defaults to True.
+    Returns:
+        (list,list,list): distortion, inertia, and silhouette
     """
     inertia,distortion,silhouette = [],[],[]
     
@@ -500,13 +507,16 @@ def id_num_clusters(X_df,k_groups = np.arange(2,15)):
         inertia.append(kmodel.inertia_)
         silhouette.append(silhouette_score(X_df,kmodel.labels_))
 
-    plt.figure(figsize = (20,5))
-    plt.subplot(131)
-    plt.plot(k_groups,distortion,'--o'); plt.xlabel('Number of Clusters'); plt.ylabel('Distortion')
-    plt.subplot(132)
-    plt.plot(k_groups,inertia,'--o'); plt.xlabel('Number of Clusters'); plt.ylabel('Inertia')
-    plt.subplot(133)
-    plt.plot(k_groups,silhouette,'-o'); plt.xlabel('Number of Clusters'); plt.ylabel('Silhouette Score')
+    if show:
+        plt.figure(figsize = (20,5))
+        plt.subplot(131)
+        plt.plot(k_groups,distortion,'--o'); plt.xlabel('Number of Clusters'); plt.ylabel('Distortion')
+        plt.subplot(132)
+        plt.plot(k_groups,inertia,'--o'); plt.xlabel('Number of Clusters'); plt.ylabel('Inertia')
+        plt.subplot(133)
+        plt.plot(k_groups,silhouette,'-o'); plt.xlabel('Number of Clusters'); plt.ylabel('Silhouette Score')
+
+    return distortion, inertia, silhouette
 
 def Coalesce_Euler3D(df,as_list = True):
     """Function to combine the Euler Trace
@@ -594,23 +604,82 @@ def _extend_time(row,col,max_samps,val = np.nan):
     row[col].extend(vect_extend)
     return row
 
-def id_num_time_series_clusters(X_df,k_groups = np.arange(2,10)):
-    """Visualize the silhouette and inertia of clustering the data into various numbers of time series clusters.
+def id_num_time_series_clusters(X_df,k_groups = np.arange(2,10),show = True):
+    """Identify and visualize the silhouette and inertia of clustering the data into various numbers of time series clusters.
 
     Args:
         X_df (pandas.DataFrame): DataFrame of features to cluster
         k_groups (np.array, optional): Array of number of clusters to visualize. Defaults to np.arange(1,15).
+        show (bool, optional): To display the inertia, distortion and silhouette scores. Defaults to True.
+    
+    Returns:
+        (list,list): inertia, and silhouette
+    
     """
     inertia,silhouette = [],[]
     
     for k in k_groups:
         kmodel = TimeSeriesKMeans(n_clusters = k,init = 'random',metric = 'dtw',max_iter=5).fit(X_df)
 
-        silhouette.append(ts_silhouette_score)
+        silhouette.append(ts_silhouette_score(X_df,kmodel.labels_))
         inertia.append(kmodel.inertia_)
 
-    plt.figure(figsize = (20,5))
-    plt.subplot(121)
-    plt.plot(k_groups,silhouette,'--o'); plt.xlabel('Number of Clusters'); plt.ylabel('Silhouette score')
-    plt.subplot(122)
-    plt.plot(k_groups,inertia,'--o'); plt.xlabel('Number of Clusters'); plt.ylabel('Inertia')
+    if show:
+        plt.figure(figsize = (20,5))
+        plt.subplot(121)
+        plt.plot(k_groups,silhouette,'--o'); plt.xlabel('Number of Clusters'); plt.ylabel('Silhouette score')
+        plt.subplot(122)
+        plt.plot(k_groups,inertia,'--o'); plt.xlabel('Number of Clusters'); plt.ylabel('Inertia')
+
+    return inertia, silhouette
+
+def my_augmentation(df):
+    """Combination of all the data augmentation so that we can repeat it later on more effectively.
+
+    Args:
+        df (pandas.DataFrame): DataFrame to turn into a feature matrix for KMeans by augmenting datasets
+   
+    Returns:
+        (pandas.DataFrame, pandas.DataFrame,list) : DataFrame containing only the scalar values and features used for K means, Dataframe containing all of the summary stats and original values., list of columns to drop
+    """
+
+
+    to_drop = ['Time (ms)','Channel 0 Raw','Channel 1 Raw',
+        'Quaternion x','Quaternion y','Quaternion z','Quaternion w',
+        'num_samples','Repetition number']
+
+    ssa_cols = ['Channel 0 HP','Channel 1 HP','Accelerometer_power','Euler_x','Euler_y','Euler_z']
+    freq_cols = ['Channel 0 HP','Channel 1 HP','Accelerometer_power']
+
+    #Create Frequency components
+    for col_name in ssa_cols:
+        tmp_df = cheap_ssa_analysis(df,col_name)
+    for col_name in freq_cols:
+        tmp_df = estimate_frequency_spectra(tmp_df,col_name)    
+    
+    #Summarize time series data with univariate analysis
+    stats = {'mean' : np.mean, 'std' : np.std, 'power' :  (lambda x : np.sqrt(np.sum(np.abs(x)**2)))}
+    cols1 = ['Accelerometer x (m2/s)','Accelerometer y (m2/s)',
+        'Accelerometer z (m2/s)','Gyroscope x (deg/s)','Gyroscope y (deg/s)',
+        'Gyroscope z (deg/s)','Euler_x','Euler_y','Euler_z','Channel 1 HP','Channel 0 HP']
+    for c in cols1:
+        tmp_df = univariate_analysis(df,c,stats)
+
+
+    #For the spectral analysis, only identify the power
+    stats = {'power' :  (lambda x : np.sqrt(np.sum(np.abs(x)**2)))}
+    cols2 = ['Euler_x ssa_0', 'Euler_x ssa_1', 'Euler_x ssa_2',
+       'Euler_y ssa_0', 'Euler_y ssa_1', 'Euler_y ssa_2',
+       'Euler_z ssa_0', 'Euler_z ssa_1', 'Euler_z ssa_2',
+       'Channel 0 HP ssa_0', 'Channel 0 HP ssa_1', 'Channel 0 HP ssa_2',
+       'spectra_Channel 0 HP', 'Channel 1 HP ssa_0', 'Channel 1 HP ssa_1',
+       'Channel 1 HP ssa_2', 'spectra_Channel 1 HP',
+       'Accelerometer_power ssa_0', 'Accelerometer_power ssa_1',
+       'Accelerometer_power ssa_2', 'spectra_Accelerometer_power']
+    for c in cols2:
+        tmp_df = univariate_analysis(tmp_df,c,stats)
+
+    cols_to_drop = to_drop + cols1 + cols2 + ['Accelerometer_power','Body movement label']
+    X = tmp_df[tmp_df.columns.drop(to_drop).drop(cols1).drop(cols2).drop(['Accelerometer_power','Body movement label'])]
+    
+    return X,tmp_df,cols_to_drop
