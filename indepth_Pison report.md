@@ -1,5 +1,5 @@
-# Pison Report
-Highlights:
+# Pison Report:
+Highlights: https://github.com/gerardoRO/Pison
 * 6 gestures identified with K Means clustering
 * XGBoost Classifier returns an F1 score of 84% in the classification.
 * Extendable function library that can be augmented for deeper analysis.
@@ -35,21 +35,21 @@ Step 5: Attempt to classify different groups.
 
 * Dataset has some big jumps in time that separate the body positionings, so first I looked at the IMU data in these groups to see if there were clear groupings of gestures.
 
-![Quaternion data](initial_quaternion_plotting.png)
+![Quaternion data](images/initial_quaternion_plotting.png)
 
 * The IMU data also seems to be all over the place in terms of scaling, this could be due to new gestures present or due to noisiness in the data.
 
-![IMU data](imu_ide.png)
+![IMU data](images/imu_ide.png)
 
 * The accelerometer data also seems to have some strong underlying oscillations, that perhaps can highlight repetitions of gestures, so we can use this to segregate gestures.
 
-![accelerometer data](accelerometer_data.png)
+![accelerometer data](images/accelerometer_data.png)
 
 ### 2. Dataset Generation
 <b>Goal: Generate a NxM table with N number of samples ideally corresponding to a gesture.</b> \
 I decided to use the accelerometer underlying oscillations and peaks to segregate our datasets into samples. I worked with a fixed value of height and distance chosen, but I later on explore how changing these parameters affects our gesture classification.
 
-![peaks trace](accelerometer_trace_w_peaks.png)
+![peaks trace](images/accelerometer_trace_w_peaks.png)
 
 ### 3. Data Augmentation
 <b> Goal: Generate the M properties of the table described above to classify gestures effectively. </b>
@@ -78,32 +78,32 @@ For time sake and personal experience, I chose the simple K Means and also utili
 #### Simple K Means:
 Visualizing the K Means results, we can see an increase in silhouette score at around 6-8 gestures, and an elbow like behavior around 6-7 for the inertia score.
 
-![simple k means](kmeans_clustering.png)
+![simple k means](images/kmeans_clustering.png)
 
 ##### Time shifting of peaks
 To this analysis, I extended varying the peaks to determine the heights to segregate the gestures (and also shifted the times) and we see that for a height of 10 and a shift of 200 we get an increase in silhouette score.
-![shifted graphs](shifted_kmeans_clustering.png)
+![shifted graphs](images/shifted_kmeans_clustering.png)
 
 #### Simple DTW Clustering:
 Before moving into complex K Means approaches, I used DBSCAN with a pre-computed DTW matrix to see if we could bypass the complexity of the next code.
-![dtw_distance matrix](dtw_dbscan_clustering.png)
+![dtw_distance matrix](images/dtw_dbscan_clustering.png)
 
 The clustering looks all over the place, so I continued on.
 
 #### Time-series K Means Clstering:
 With the above analysis landing us on the fact there's somewhere between 6-8 gestures, let's apply DTW clustering that is very computational expensive.
-![time-series k means clustering](time_series_kmeans_clustering.png)
+![time-series k means clustering](images/time_series_kmeans_clustering.png)
 
 This is much harder to interpret but we also see an increase of silhouette score at 6-7 but an increase in inertia at 7. So I chose to stick to 6 gestures.
 
 
 #### Clustering Conclusions:
-![clustering](kmeans_clustering_visualization.png)
+![clustering](images/kmeans_clustering_visualization.png)
 
 We see that when I segregated with a peak of 10 and a distance of 200, and 6 gestures, we get some consistent gesture motions. With linear motion, rotational motion,and some more diverse motion.
 
 ### 5. Classification
-![ROC Curve](auc_curve_onevsall_classification.png)
+![ROC Curve](images/auc_curve_onevsall_classification.png)
 
 With our limited dataset, when we run One vs All XGBoost Classifier, we get some pretty astounding scores!
 

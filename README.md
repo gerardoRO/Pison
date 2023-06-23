@@ -9,6 +9,7 @@ Repository contains the following:
 
 * Data Scientist Project.docx.pdf - Instructions and guidelines
 * Pison_hw.ipynb - Jupyter notebook with the work performed, including built in functions, markdown, and thoughts as I worked through it.
-* Pison_report.md- Highlighted summary of the work.
+* indepth_Pison_report.md- Highlighted summary of the work at more indepth.
+* short_Pison_report.md - 2 page summary of the work performed.
 * pison_functions.py - Python file containing the custom functions for the analyze and exploration of the work performed in Pison_hw.ipynb
 * requirements.txt - packages required to run this repository 
