@@ -12,14 +12,16 @@ from fastdtw import fastdtw
 from pyts.decomposition import SingularSpectrumAnalysis as ssa
 
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.manifold import TSNE
-from sklearn.decomposition import PCA
-from sklearn.cluster import DBSCAN, KMeans
-from sklearn.metrics import silhouette_score
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score, confusion_matrix, ConfusionMatrixDisplay, f1_score, roc_auc_score, RocCurveDisplay
+from sklearn.model_selection import train_test_split
 
 from tslearn.metrics import dtw_path
 from tslearn.clustering import TimeSeriesKMeans, silhouette_score as ts_silhouette_score
+
+from xgboost import XGBClassifier
+
 
 import time 
 
@@ -361,6 +363,21 @@ def vis_sensors_raw(df,accel_names = ['Channel 0 Raw','Channel 1 Raw'] ,color1 =
     this_ax.plot(t_vec,sensor_1_raw,color = color_pal2) 
     this_ax.legend(['Raw 0','Raw 1'])
 
+def my_dtw(array_one,array_two,metric=euclidean):
+    """Wrapper for fast dtw so that we only return the distance
+
+    Args:
+        array_one (np.array): signal one
+        array_two (np.array): signal two
+        metric (scip.spatial.distance, optional): Metric to use for DTW. Defaults to euclidean.
+
+    Returns:
+        float: Dynamic Time Wrapping distance
+    """
+    distance,_ = fastdtw(array_one,array_two,dist=metric)
+
+    return distance
+
 def estimate_accelerometer_power(df,accel_cols = ['Accelerometer x (m2/s)','Accelerometer y (m2/s)','Accelerometer z (m2/s)']):
     """Compute the magnitude of all the vectors provided (applied to the accelerometer data)
 
@@ -683,3 +700,21 @@ def my_augmentation(df):
     X = tmp_df[tmp_df.columns.drop(to_drop).drop(cols1).drop(cols2).drop(['Accelerometer_power','Body movement label'])]
     
     return X,tmp_df,cols_to_drop
+
+def score_model(model,features,labels):
+    """Score out the tested model
+
+    Args:
+        model (model type): Object containing predict and predict_proba attributes
+        features (pandas.DataFrame): Feature set of the testing dataset
+        labels (list): Class id for the testing dataset
+
+    Returns:
+        float,float: f1 score and roc_score
+    """
+    preds = model.predict(features)
+    f1= f1_score(labels,preds,average = 'macro')
+    roc_score = roc_auc_score(labels,model.predict_proba(features),multi_class = 'ovr')
+
+    print(f'f1 score: {f1}, roc_score: {roc_score}')
+    return f1,roc_score
